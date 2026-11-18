@@ -14,6 +14,20 @@ the engines inside Kali Linux (WSL). Live meters and graphs, network
 scanner panel, interactive TALK strip, stream-while-running console.
 Full detail in `CrackerJacked/README.md`.
 
+### HexJacked (v1.0.0)
+The mobile & binary workbench — JADX decompile, MobSF static scan +
+dashboard, Frida live hooks, Impacket network, Hashcat crack. Same Kali
+(WSL) engine host, hex-tile cockpit, live meters.
+Full detail in `HexJacked/README.md`.
+
+### ReconJacked (v1.0.0)
+The flagship reconnaissance & OSINT command deck — Sherlock usernames,
+theHarvester emails/hosts, Amass attack surface, ExifTool metadata,
+Gitleaks secrets. A vertical hunter rail feeds one interactive FINDINGS
+DECK: every scraped item streams in as a row you can filter, export,
+open in browser, and PIVOT into the next scout. Built 2026-11-18.
+Full detail in `ReconJacked/README.md`.
+
 ## The rules of the files
 
 - Built for testing systems you own your way.
