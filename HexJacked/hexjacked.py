@@ -61,10 +61,12 @@ TOOLS = {
         "name": "MobSF - Static Scan", "sub": "Mobile pen-test framework",
         "glyph": "MBF", "color": BLUE,
         "preset": "cd /opt/mobsf/Mobile-Security-Framework-MobSF"
-                  " && ./venv/bin/python manage.py runserver 0.0.0.0:8000",
+                  " && /root/.cache/pypoetry/virtualenvs/mobsf-MxG4Buoj-py3.13"
+                  "/bin/python manage.py runserver 0.0.0.0:8000",
         "presets": (
             "cd /opt/mobsf/Mobile-Security-Framework-MobSF"
-            " && ./venv/bin/python manage.py runserver 0.0.0.0:8000",
+            " && /root/.cache/pypoetry/virtualenvs/mobsf-MxG4Buoj-py3.13"
+            "/bin/python manage.py runserver 0.0.0.0:8000",
             'mobsfscan "<file-or-dir>"',
             'mobsfscan --json "<file-or-dir>"',
         ),
