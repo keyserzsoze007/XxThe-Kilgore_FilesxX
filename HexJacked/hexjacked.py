@@ -110,7 +110,7 @@ TOOLS = {
 }
 TOOL_ORDER = ["jadx", "mobsf", "frida", "impacket", "hashcat"]
 
-INSTALL_PKGS = ("jadx apktool hashcat impacket pocl-opencl-icd "
+INSTALL_PKGS = ("jadx apktool hashcat python3-impacket pocl-opencl-icd "
                 "ocl-icd-libopencl1 python3-pip")
 
 PROBE_SCRIPT = (
