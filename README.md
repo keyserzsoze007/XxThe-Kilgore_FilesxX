@@ -20,13 +20,13 @@ dashboard, Frida live hooks, Impacket network, Hashcat crack. Same Kali
 (WSL) engine host, hex-tile cockpit, live meters.
 Full detail in `HexJacked/README.md`.
 
-### ReconJacked (v1.0.0)
+### XXxVector_SourcingxXX (v1.0.0)
 The flagship reconnaissance & OSINT command deck — Sherlock usernames,
 theHarvester emails/hosts, Amass attack surface, ExifTool metadata,
 Gitleaks secrets. A vertical hunter rail feeds one interactive FINDINGS
 DECK: every scraped item streams in as a row you can filter, export,
 open in browser, and PIVOT into the next scout. Built 2026-11-18.
-Full detail in `ReconJacked/README.md`.
+Full detail in `XXxVector_SourcingxXX/README.md`.
 
 ## The rules of the files
 

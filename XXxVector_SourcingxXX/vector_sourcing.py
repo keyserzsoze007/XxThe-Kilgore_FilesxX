@@ -1,4 +1,4 @@
-"""ReconJacked - the OSINT hunter deck: five scout engines, one window (WSL Kali underneath).
+"""XXxVector_SourcingxXX - the OSINT hunter deck: five scout engines, one window (WSL Kali underneath).
 
 Hunts first, breaks later. All findings land in a clickable deck - open, copy,
 pivot into another engine, export. Nothing here phones home.
@@ -25,7 +25,7 @@ from tkinter import filedialog
 from tkinter import messagebox
 import webbrowser
 
-APP_NAME = "ReconJacked"
+APP_NAME = "XXxVector_SourcingxXX"
 APP_VER = "1.0.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
@@ -700,7 +700,7 @@ class App(tk.Tk):
         logo.pack(side="left", padx=(10, 12))
         tt = tk.Frame(head, bg=PANEL)
         tt.pack(side="left")
-        tk.Label(tt, text="RECONJACKED", bg=PANEL, fg=TXT,
+        tk.Label(tt, text="XXxVector_SourcingxXX", bg=PANEL, fg=TXT,
                  font=("Segoe UI", 16, "bold")).pack(anchor="w")
         sig = tk.Frame(tt, bg=PANEL)
         sig.pack(anchor="w")
@@ -1201,7 +1201,7 @@ class App(tk.Tk):
             return
         p = filedialog.asksaveasfilename(
             title="export findings", defaultextension=".csv",
-            initialfile="reconjacked-findings.csv",
+            initialfile="XXxVector_SourcingxXX-findings.csv",
             filetypes=(("CSV", "*.csv"), ("TXT", "*.txt"), ("All files", "*.*")))
         if not p:
             return

@@ -1,8 +1,10 @@
-# RECONJACKED
+# **XXxVector_SourcingxXX**
 
 **CREATED BY XxREPTILExX & XxNEOPAULxX**
 
-ReconJacked v1.0.0 - the reconnaissance & OSINT command deck. A Windows GUI
+XXxVector_SourcingxXX v1.0.0 - the reconnaissance & OSINT command deck
+(christened by zack 2026-11-18; first boot was as ReconJacked the same
+night). A Windows GUI
 that drives five scout engines inside the Kali Linux WSL distro
 (`kali-linux`) and parses their live output into an interactive FINDINGS
 DECK - every scraped item becomes a row you can click, pivot, export.
@@ -46,7 +48,7 @@ Complete build 2026-11-18 on PAUL-MOBILE.
 
 ## Use steps
 
-1. Run **ReconJacked.exe**. Hunter tabs flip to DETECTED after the live
+1. Run **XXxVector_SourcingxXX.exe**. Hunter tabs flip to DETECTED after the live
    engine check (first probe runs automatically).
 2. Pick a hunter tab, pick a COMMAND preset.
 3. **BROWSE** (or type) a target, **RUN** - the console streams raw engine
@@ -64,5 +66,7 @@ Complete build 2026-11-18 on PAUL-MOBILE.
   theHarvester 4.11.1, Amass 5.1.3, ExifTool 13.55, Gitleaks 8.26).
 - Gitleaks allowlists AWS's printed example keys - use a real-shaped
   secret to test it; findings from `--verbose` blocks are what feed the deck.
-- Raw logs land in `%APPDATA%\ReconJacked\logs`.
+- Raw logs land in `<exe folder>\logs` (falls back to
+  `%APPDATA%\XXxVector_SourcingxXX\logs` when the exe folder is
+  unwritable).
 - your lab. your gear. nothing here phones home.
