@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.4.2"
+APP_VER = "1.4.3"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -482,7 +482,7 @@ class Job:
 
 class Gauge(tk.Canvas):
     def __init__(self, parent, label, color, fmt="%.0f%%", fmtfn=None):
-        super().__init__(parent, width=104, height=150, bg=PANEL, highlightthickness=0)
+        super().__init__(parent, width=104, height=112, bg=PANEL, highlightthickness=0)
         self.label = label
         self.color = color
         self.fmt = fmt
@@ -507,7 +507,7 @@ class Gauge(tk.Canvas):
     def onpaint(self):
         c = self
         c.delete("all")
-        w, h = 104, 150
+        w, h = 104, 112
         frac = max(0.0, min(1.0, self.display / 100.0 if self.fmt == "%.0f%%" else
                             min(1.0, self.display / max(1.0, self.tgt * 1.25))))
         bx, bw = 28, 26
@@ -532,7 +532,7 @@ class Gauge(tk.Canvas):
 
 class Sparkline(tk.Canvas):
     def __init__(self, parent, color):
-        super().__init__(parent, width=520, height=150, bg=PANEL, highlightthickness=0)
+        super().__init__(parent, width=520, height=112, bg=PANEL, highlightthickness=0)
         self.color = color
         self.data = [0.0] * 130
         self.peak = 1.0
@@ -549,7 +549,7 @@ class Sparkline(tk.Canvas):
         c = self
         c.delete("all")
         w = max(300, int(c.winfo_width()) or 520)
-        h = 150
+        h = 112
         top, bottom = 26, h - 22
         for i in range(1, 5):
             y = top + (bottom - top) * i / 4.0
@@ -777,8 +777,8 @@ class App(tk.Tk):
 
         right = tk.Frame(self, bg=BG)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 14))
-        right.rowconfigure(1, weight=4)
-        right.rowconfigure(2, weight=3)
+        right.rowconfigure(1, weight=6)
+        right.rowconfigure(2, weight=2)
         right.columnconfigure(0, weight=1)
 
         bar = tk.Frame(right, bg=PANEL)
@@ -878,8 +878,8 @@ class App(tk.Tk):
         decksplit = tk.Frame(deckwrap, bg=PANEL)
         decksplit.grid(row=1, column=0, sticky="nsew")
         decksplit.rowconfigure(0, weight=1)
-        decksplit.columnconfigure(0, weight=5, minsize=560)
-        decksplit.columnconfigure(1, weight=4, minsize=400)
+        decksplit.columnconfigure(0, weight=3, minsize=660)
+        decksplit.columnconfigure(1, weight=1, minsize=380)
 
         deckbody = tk.Frame(decksplit, bg=PANEL)
         deckbody.grid(row=0, column=0, sticky="nsew")
@@ -887,8 +887,8 @@ class App(tk.Tk):
                                  show="headings", style="Deck.Treeview",
                                  selectmode="browse")
         for cid, txt, w, stretch in (
-                ("eng", "SCOUT", 92, True), ("find", "FINDING", 190, True),
-                ("val", "VALUE", 380, True), ("det", "DETAIL", 220, True)):
+                ("eng", "SCOUT", 64, True), ("find", "FINDING", 140, True),
+                ("val", "VALUE", 260, True), ("det", "DETAIL", 104, True)):
             self.deck.heading(cid, text=txt)
             self.deck.column(cid, width=w, anchor="w", stretch=stretch)
         vsb = ttk.Scrollbar(deckbody, command=self.deck.yview)
@@ -945,19 +945,15 @@ class App(tk.Tk):
         self.viewer.insert("1.0", " click or double-click a finding -\n its full content opens here")
         self.viewer.configure(state="disabled")
 
-        hint = tk.Label(deckwrap, text=" click a finding: content lands on the right "
-                        "panel  -  double-click: full content + one-click actions "
-                        " OPEN / UNMASK / RAW LINE / PIVOT / COPY / WHOIS / DIG  "
-                        "-  FULL SCREEN button (top bar) grows the window",
-                        bg=PANEL, fg=DIM, font=("Segoe UI", 7, "italic"), anchor="w")
-        hint.grid(row=2, column=0, sticky="ew")
+        deckwrap.columnconfigure(0, weight=1)
+        deckwrap.rowconfigure(1, weight=1)
 
         conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
         conwrap.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
         self.console = tk.Text(conwrap, bg=PANEL, fg=TXT, wrap="none",
                                insertbackground=TURQ, selectbackground=BLUE,
                                font=("Consolas", 10), bd=0, padx=12, pady=8,
-                               state="disabled", relief="flat", height=8)
+                               state="disabled", relief="flat", height=5)
         csb = ttk.Scrollbar(conwrap, command=self.console.yview)
         self.console.configure(yscrollcommand=csb.set)
         self.console.pack(fill="both", expand=True, side="left")
@@ -1005,7 +1001,11 @@ class App(tk.Tk):
         self.chart = Sparkline(meters, TURQ)
         self.chart.pack(side="left", fill="both", expand=True)
 
-        self.statusbar = tk.Label(bottm, text="", bg=PANEL, fg=DIM, anchor="w",
+        self.statusbar = tk.Label(bottm, text=" click a finding: content lands on the "
+                                  "right panel  -  double-click: full content + one-click "
+                                  "actions  OPEN / UNMASK / RAW LINE / PIVOT / COPY / "
+                                  "WHOIS / DIG  -  FULL SCREEN button (top bar) grows "
+                                  "the window", bg=PANEL, fg=DIM, anchor="w",
                                   font=("Segoe UI", 8), padx=12, pady=4)
         self.statusbar.pack(side="left", fill="both", expand=True)
 

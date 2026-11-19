@@ -2,7 +2,7 @@
 
 **CREATED BY XxREPTILExX & XxNEOPAULxX**
 
-XXxVector_SourcingxXX v1.4.2 - the reconnaissance & OSINT command deck
+XXxVector_SourcingxXX v1.4.3 - the reconnaissance & OSINT command deck
 (christened by zack 2026-11-18; first boot was as ReconJacked the same
 night). A Windows GUI
 that drives five scout engines inside the Kali Linux WSL distro
