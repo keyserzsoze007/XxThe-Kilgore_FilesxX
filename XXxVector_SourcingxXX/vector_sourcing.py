@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.4.3"
+APP_VER = "1.4.4"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -777,12 +777,12 @@ class App(tk.Tk):
 
         right = tk.Frame(self, bg=BG)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 14))
-        right.rowconfigure(1, weight=6)
-        right.rowconfigure(2, weight=2)
+        right.rowconfigure(2, weight=6)
+        right.rowconfigure(3, weight=2)
         right.columnconfigure(0, weight=1)
 
         bar = tk.Frame(right, bg=PANEL)
-        bar.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        bar.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
         tk.Label(bar, text=" SCOUT", bg=PANEL, fg=DIM,
                  font=("Segoe UI", 8, "bold")).pack(side="left", pady=8)
         self.toolvar = tk.StringVar(value=ENGINES[self.selected]["name"])
@@ -824,7 +824,7 @@ class App(tk.Tk):
         self.full_btn.bind("<Button-1>", lambda e: self._toggle_full())
 
         stages = tk.Frame(right, bg=PANEL)
-        stages.grid(row=0, column=1, sticky="ew", pady=(0, 6))
+        stages.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 4))
         tk.Label(stages, text=" FLOW", bg=PANEL, fg=DIM,
                  font=("Segoe UI", 8, "bold")).pack(side="left", pady=8)
         self.stage_lamps = {}
@@ -837,7 +837,7 @@ class App(tk.Tk):
             self.stage_lamps[k] = lamp
 
         deckwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
-        deckwrap.grid(row=1, column=0, sticky="nsew")
+        deckwrap.grid(row=2, column=0, columnspan=2, sticky="nsew")
         deckwrap.columnconfigure(0, weight=1)
         deckwrap.rowconfigure(1, weight=1)
         dhead = tk.Frame(deckwrap, bg=PANEL)
@@ -949,7 +949,7 @@ class App(tk.Tk):
         deckwrap.rowconfigure(1, weight=1)
 
         conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
-        conwrap.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
+        conwrap.grid(row=3, column=0, columnspan=2, sticky="nsew", pady=(6, 0))
         self.console = tk.Text(conwrap, bg=PANEL, fg=TXT, wrap="none",
                                insertbackground=TURQ, selectbackground=BLUE,
                                font=("Consolas", 10), bd=0, padx=12, pady=8,
@@ -965,7 +965,7 @@ class App(tk.Tk):
                                    font=("Consolas", 10, "bold"))
 
         talkm = tk.Frame(right, bg=BG)
-        talkm.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        talkm.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(6, 0))
         talk = tk.Frame(talkm, bg=PANEL)
         talk.pack(side="left", fill="x", expand=True)
         self.talk_lbl = tk.Label(talk, text=" TALK TO %s " % ENGINES[self.selected]["name"],
