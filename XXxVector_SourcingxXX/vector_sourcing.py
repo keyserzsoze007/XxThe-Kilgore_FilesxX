@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.2.1"
+APP_VER = "1.2.2"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -1364,7 +1364,9 @@ class App(tk.Tk):
             self.cmdvar.set(re.sub(r"<[^>]+>", val, cur, count=1))
         else:
             toks = cur.split(" ")
-            self.cmdvar.set(" ".join([toks[0], '"%s"' % val] + toks[1:]))
+            if len(toks) > 1 and toks[1].startswith('"') and toks[1].endswith('"'):
+                toks[1] = '"%s"' % val
+                self.cmdvar.set(" ".join(toks))
 
     def talk_send(self):
         key = self.selected
