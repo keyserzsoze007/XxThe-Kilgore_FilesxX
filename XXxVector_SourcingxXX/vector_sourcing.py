@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.2.0"
+APP_VER = "1.2.1"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -387,7 +387,8 @@ class Job:
 
     def start(self):
         cmdline = self.cmdline
-        cmd = [WSL_EXE, "-d", DISTRO, "-u", "root", "--", "bash", "-lc", cmdline]
+        cmd = [WSL_EXE, "-d", DISTRO, "-u", "root", "--", "bash", "-lc",
+               "cd /tmp && " + cmdline]
         try:
             self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                          stderr=subprocess.STDOUT, stdin=subprocess.PIPE,
