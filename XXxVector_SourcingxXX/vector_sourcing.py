@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.4.0"
+APP_VER = "1.4.1"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -666,8 +666,6 @@ class App(tk.Tk):
         self.configure(bg=BG)
         self.geometry("1400x860")
         self.minsize(1200, 720)
-        if self.winfo_screenwidth() >= 1366:
-            self.state("zoomed")
         self._alive = True
         self.probe_running = False
 
@@ -819,6 +817,11 @@ class App(tk.Tk):
                                  font=("Consolas", 11, "bold"), padx=14, pady=5, cursor="hand2")
         self.stop_btn.pack(side="left", padx=(2, 10))
         self.stop_btn.bind("<Button-1>", lambda e: self.stop_selected())
+        self.full_btn = tk.Label(bar, text=" FULL SCREEN ", bg=PANEL2, fg=TURQ,
+                                 font=("Consolas", 10, "bold"), padx=10, pady=5,
+                                 cursor="hand2")
+        self.full_btn.pack(side="left", padx=(2, 12))
+        self.full_btn.bind("<Button-1>", lambda e: self._toggle_full())
 
         stages = tk.Frame(right, bg=PANEL)
         stages.grid(row=0, column=1, sticky="ew", pady=(0, 6))
@@ -916,31 +919,35 @@ class App(tk.Tk):
         self._view_rawline = False
         vbtn = tk.Frame(viewwrap, bg=PANEL2)
         vbtn.grid(row=1, column=0, sticky="ew")
-        for label, fn, fg in (
-                (" OPEN ", self._view_open, TURQ),
-                (" UNMASK ", self._view_reveal, AMBER),
-                (" RAW LINE ", self._view_raw, AMBER),
-                (" PIVOT ", self._view_pivot, BLUE),
-                (" COPY VAL ", self._view_copy_val, GREEN),
-                (" COPY FULL ", self._view_copy_full, GREEN),
-                (" WHOIS ", lambda: self._view_lane("whois"), BLUE),
-                (" DIG ", lambda: self._view_lane("dig"), BLUE)):
-            b = tk.Label(vbtn, text=label, bg=PANEL, fg=fg,
-                         font=("Consolas", 8, "bold"), padx=7, pady=3,
-                         cursor="hand2")
-            b.pack(side="left", padx=(5, 0), pady=3)
-            b.bind("<Button-1>", lambda e, f=fn: f())
+        for strip, defs in (
+                (0, ((" OPEN ", self._view_open, TURQ),
+                     (" UNMASK ", self._view_reveal, AMBER),
+                     (" RAW LINE ", self._view_raw, AMBER),
+                     (" PIVOT ", self._view_pivot, BLUE))),
+                (1, ((" COPY VAL ", self._view_copy_val, GREEN),
+                     (" COPY FULL ", self._view_copy_full, GREEN),
+                     (" WHOIS ", lambda: self._view_lane("whois"), BLUE),
+                     (" DIG ", lambda: self._view_lane("dig"), BLUE)))):
+            rowf = tk.Frame(vbtn, bg=PANEL2)
+            rowf.pack(side="top", fill="x")
+            for label, fn, fg in defs:
+                b = tk.Label(rowf, text=label, bg=PANEL, fg=fg,
+                             font=("Consolas", 8, "bold"), padx=7, pady=3,
+                             cursor="hand2")
+                b.pack(side="left", padx=(5, 0), pady=3)
+                b.bind("<Button-1>", lambda e, f=fn: f())
         self.viewer = tk.Text(viewwrap, bg=PANEL, fg=TXT, wrap="char",
                               bd=0, padx=10, pady=8, font=("Consolas", 10),
                               relief="flat", state="disabled", takefocus=0)
         self.viewer.grid(row=2, column=0, sticky="nsew")
         self.viewer.configure(state="normal")
-        self.viewer.insert("1.0", " double-click a finding -\n its full content opens here")
+        self.viewer.insert("1.0", " click or double-click a finding -\n its full content opens here")
         self.viewer.configure(state="disabled")
 
         hint = tk.Label(deckwrap, text=" click a finding: content lands on the right "
                         "panel  -  double-click: full content + one-click actions "
-                        " OPEN / UNMASK / RAW LINE / PIVOT / COPY / WHOIS / DIG",
+                        " OPEN / UNMASK / RAW LINE / PIVOT / COPY / WHOIS / DIG  "
+                        "-  FULL SCREEN button (top bar) grows the window",
                         bg=PANEL, fg=DIM, font=("Segoe UI", 7, "italic"), anchor="w")
         hint.grid(row=2, column=0, sticky="ew")
 
@@ -1413,6 +1420,20 @@ class App(tk.Tk):
                         % lane.upper())
             return
         self._quick_lane(lane, host)
+
+    def _toggle_full(self):
+        try:
+            if self.wm_state() == "zoomed":
+                self.wm_state("normal")
+                self.geometry("1400x860")
+                self.full_btn.configure(text=" FULL SCREEN ")
+                self.sysmsg("window restored - FULL SCREEN grows it back")
+            else:
+                self.wm_state("zoomed")
+                self.full_btn.configure(text=" RESTORE ")
+                self.sysmsg("full screen on - RESTORE gives the window back")
+        except Exception as e:
+            self.sysmsg("window size toggle failed: %s" % e)
 
     def _copy_detail(self, row):
         self.clipboard_clear()
