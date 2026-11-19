@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.2.2"
+APP_VER = "1.3.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -68,11 +68,11 @@ ENGINES = {
         "bin": "theHarvester", "name": "theHarvester - Domains",
         "sub": "emails / hosts / people from public sources",
         "glyph": "HRV", "color": BLUE,
-        "preset": 'theHarvester -d "<domain>" -b bing,crtsh,otx',
+        "preset": 'theHarvester -d "<domain>" -b crtsh,otx,duckduckgo,hackertarget',
         "presets": (
-            'theHarvester -d "<domain>" -b bing,crtsh,otx',
-            'theHarvester -d "<domain>" -b bing',
-            'theHarvester -d "<domain>" -b crtsh',
+            'theHarvester -d "<domain>" -b crtsh,otx,duckduckgo,hackertarget',
+            'theHarvester -d "<domain>" -b crtsh,otx',
+            'theHarvester -d "<domain>" -b duckduckgo',
         ),
         "ph": "<domain>", "pivot_hint": "domain",
     },
@@ -80,11 +80,11 @@ ENGINES = {
         "bin": "amass", "name": "Amass - Assets",
         "sub": "deep attack-surface mapping (passive)",
         "glyph": "AMS", "color": TURQ,
-        "preset": 'amass enum -passive -d "<domain>"',
+        "preset": 'amass enum -d "<domain>"',
         "presets": (
-            'amass enum -passive -d "<domain>"',
-            'amass enum -passive -d "<domain>" -src',
-            'amass enum -passive -d "<domain>" -ip',
+            'amass enum -d "<domain>"',
+            'amass enum -d "<domain>" -src',
+            'amass enum -d "<domain>" -ip',
         ),
         "ph": "<domain>", "pivot_hint": "domain",
     },
@@ -110,6 +110,16 @@ ENGINES = {
             'gitleaks git "<repo-dir>" --verbose',
         ),
         "ph": "<target-dir>", "pivot_hint": "directory",
+    },
+    "whois": {
+        "bin": "whois", "name": "Whois - Registry",
+        "sub": "registry facts for a domain (quick lane)",
+        "glyph": "WHS", "color": BLUE,
+    },
+    "dig": {
+        "bin": "dig", "name": "Dig - DNS",
+        "sub": "live DNS records for a domain (quick lane)",
+        "glyph": "DNS", "color": TURQ,
     },
 }
 ENGINE_ORDER = ["sherlock", "harv", "amass", "exif", "leaks"]
@@ -340,6 +350,29 @@ def parse_line(key, line, state, emit):
             state.leak["file"] = low.split(":", 1)[1].strip()
         elif low.startswith("Line:"):
             state.leak["line"] = low.split(":", 1)[1].strip()
+    elif key == "whois":
+        seen = getattr(state, "lane_seen", None)
+        if seen is None:
+            seen = set()
+            state.lane_seen = seen
+        m = re.match(r"^([A-Z][A-Za-z0-9 ()/.-]{2,40}?)\s*:\s*(\S.*)$", s)
+        if m:
+            k = m.group(1).strip()
+            v = m.group(2).strip()
+            kl = k.lower()
+            if any(t in kl for t in ("registrar name", "registrar", "creation date",
+                                     "created date", "updated date", "expiry date",
+                                     "expiration date", "name server",
+                                     "domain status", "registrant organization",
+                                     "registrant country", "registry expiry")):
+                pair = (k, v)
+                if pair not in seen:
+                    seen.add(pair)
+                    emit("whois", k, v[:600], "")
+    elif key == "dig":
+        m = re.match(r"^(\S+)\s+\d+\s+IN\s+(\S+)\s+(.+)$", s)
+        if m:
+            emit("dig", m.group(2), m.group(3).strip()[:600], m.group(1))
 
 
 def _deg_to_dec(gp):
@@ -858,10 +891,23 @@ class App(tk.Tk):
         self.deck.bind("<Button-1>", self._on_deck_release)
         self.deck.bind("<Double-1>", lambda e: self.deck_action(self._sel_row(),
                                                                 default=True))
-        hint = tk.Label(deckwrap, text=" click a finding: COPY / OPEN / PIVOT  "
-                        "-  double-click opens if it can",
+        inspwrap = tk.Frame(deckwrap, bg=PANEL2)
+        inspwrap.grid(row=2, column=0, sticky="ew")
+        tk.Label(inspwrap, text=" DETAIL", bg=PANEL2, fg=TURQ,
+                 font=("Segoe UI", 8, "bold")).pack(side="left", anchor="n",
+                                                    padx=(4, 0), pady=3)
+        self.inspector = tk.Text(inspwrap, bg=PANEL2, fg=TXT, wrap="char",
+                                 height=5, bd=0, padx=8, pady=4,
+                                 font=("Consolas", 9), relief="flat")
+        self.inspector.pack(side="left", fill="both", expand=True)
+        self.inspector.insert("1.0",
+                              " click a finding - everything it carries shows here")
+        self.inspector.configure(state="disabled")
+        self.deck.bind("<<TreeviewSelect>>", lambda e: self._inspect_fill())
+        hint = tk.Label(deckwrap, text=" click a finding: COPY / OPEN / COPY FULL / "
+                        "QUICK LANES / PIVOT  -  detail pane below stays live",
                         bg=PANEL, fg=DIM, font=("Segoe UI", 7, "italic"), anchor="w")
-        hint.grid(row=2, column=0, sticky="ew")
+        hint.grid(row=3, column=0, sticky="ew")
 
         conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
         conwrap.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
@@ -954,8 +1000,8 @@ class App(tk.Tk):
                 tag = "err"
             elif re.search(r"\b(warning|denied|refused)\b", low):
                 tag = "warn"
-        prefix = "[%s] %-10s" % (now, ENGINES[engine_key]["name"].upper()) if engine_key \
-            else "[%s] " % now
+        prefix = "[%s] %-10s" % (now, ENGINES.get(engine_key, {}).get(
+            "name", (engine_key or "").upper())) if engine_key else "[%s] " % now
         self.console.configure(state="normal")
         self.console.insert("end", prefix, "time")
         self.console.insert("end", text, tag if tag else ())
@@ -999,15 +1045,17 @@ class App(tk.Tk):
                     if job is not None:
                         file_flush(key, job.state,
                                    lambda e, a, b, c, **kw: self.add_finding(e, a, b, c, **kw))
-                    tab = self.tabs[key]
-                    if job is not None and job.stopped:
-                        tab.status_kind = "stopped"
-                    elif rc == 0:
-                        tab.status_kind = "done"
-                    else:
-                        tab.status_kind = "fail"
-                        tab.rc = rc
-                    self.sysmsg("%s finished (exit %s)" % (ENGINES[key]["name"], rc))
+                    tab = self.tabs.get(key)
+                    if tab is not None:
+                        if job is not None and job.stopped:
+                            tab.status_kind = "stopped"
+                        elif rc == 0:
+                            tab.status_kind = "done"
+                        else:
+                            tab.status_kind = "fail"
+                            tab.rc = rc
+                    nm = ENGINES.get(key, {}).get("name", key.upper())
+                    self.sysmsg("%s finished (exit %s)" % (nm, rc))
                 elif kind == "probe":
                     self.probe_running = False
                     self._apply_probe(item[1])
@@ -1035,8 +1083,8 @@ class App(tk.Tk):
             return
         self.find_rows_seq += 1
         iid = "f%d" % self.find_rows_seq
-        row = {"iid": iid, "eng": eng, "find": find[:60], "val": val[:600],
-               "det": det[:160]}
+        row = {"iid": iid, "eng": eng, "find": (find or "")[:300],
+               "val": (val or "")[:4000], "det": (det or "")[:2000]}
         row.update(attrs)
         self.find_rows[iid] = row
         self.find_counts[eng] = self.find_counts.get(eng, 0) + 1
@@ -1055,7 +1103,8 @@ class App(tk.Tk):
         t = ENGINES[row["eng"]]
         tag = t["glyph"]
         self.deck.insert("", "end", iid=row["iid"], tags=(tag,),
-                         values=(tag, row["find"], row["val"], row["det"]))
+                         values=(tag, row["find"], row["val"][:600],
+                                 row["det"][:160]))
 
     def _search_ok(self, row):
         if not self.deck_search:
@@ -1130,6 +1179,7 @@ class App(tk.Tk):
             t.count = 0
         self._render_deck()
         self._update_ledger()
+        self._inspect_fill()
         self.sysmsg("findings deck cleared")
 
     def deck_action(self, row, default=False):
@@ -1145,6 +1195,8 @@ class App(tk.Tk):
                              command=lambda: self._open_url(url))
         menu.add_command(label="COPY VALUE", font=("Segoe UI", 9),
                          command=lambda: self._copy_row(row, "val"))
+        menu.add_command(label="COPY FULL DETAIL", font=("Segoe UI", 9),
+                         command=lambda: self._copy_detail(row))
         if row.get("detail2"):
             menu.add_command(label="SHOW FULL LINE", font=("Segoe UI", 9),
                              command=lambda: self._copy_row(row, "line"))
@@ -1168,6 +1220,16 @@ class App(tk.Tk):
             pm.add_command(label="to %s" % ENGINES[k]["name"],
                            command=lambda kk=k: self._pivot(kk, row))
         menu.add_cascade(label="PIVOT VALUE ->", menu=pm)
+        host = self._host_of(row)
+        if host:
+            lanes = tk.Menu(menu, tearoff=0, bg=PANEL2, fg=TXT,
+                            activebackground=BLUE, activeforeground=BG,
+                            font=("Segoe UI", 9))
+            lanes.add_command(label="WHOIS registry",
+                              command=lambda: self._quick_lane("whois", host))
+            lanes.add_command(label="DIG dns records",
+                              command=lambda: self._quick_lane("dig", host))
+            menu.add_cascade(label="QUICK LANES ->", menu=lanes)
         menu.add_separator()
         menu.add_command(label="REMOVE ROW", font=("Segoe UI", 9),
                          command=lambda: self._remove_row(row))
@@ -1194,6 +1256,79 @@ class App(tk.Tk):
         self.clipboard_append(row.get("secret", ""))
         self.sysmsg("raw secret copied - handle it with gloves on")
 
+    @staticmethod
+    def _finding_text(row):
+        eng = ENGINES.get(row["eng"], {}).get("name", row["eng"])
+        lines = ["SCOUT: %s" % eng,
+                 "FINDING: %s" % row.get("find", "")]
+        if row.get("url"):
+            lines.append("URL: %s" % row["url"])
+        lines.append("VALUE: %s" % row.get("val", ""))
+        lines.append("DETAIL: %s" % row.get("det", ""))
+        for kk, vv in row.items():
+            if kk in ("iid", "eng", "find", "val", "det", "url",
+                      "secret", "revealed", "detail2", "line"):
+                continue
+            if vv in (None, ""):
+                continue
+            lines.append("%s: %s" % (kk.upper(), vv))
+        return "\n".join(lines)
+
+    def _inspect_fill(self):
+        row = self._sel_row()
+        t = self.inspector
+        t.configure(state="normal")
+        t.delete("1.0", "end")
+        if row is None:
+            t.insert("1.0", " click a finding - everything it carries shows here")
+        else:
+            t.insert("1.0", self._finding_text(row))
+        t.configure(state="disabled")
+
+    def _copy_detail(self, row):
+        self.clipboard_clear()
+        self.clipboard_append(self._finding_text(row))
+        self.sysmsg("full finding detail copied")
+
+    @staticmethod
+    def _host_of(row):
+        url = row.get("url")
+        if url:
+            try:
+                return URL_RE.match(url).group(0).split("/")[2].lower()
+            except Exception:
+                pass
+        v = (row.get("val", "") or "").strip()
+        if re.match(r"^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$", v,
+                    re.I):
+            return v.lower()
+        return None
+
+    def _quick_lane(self, lane, host):
+        if self.jobs.get(lane):
+            self.sysmsg("%s quick lane is already running - let it finish"
+                        % lane.upper())
+            return
+        if lane == "whois":
+            cmdline = 'whois "%s"' % host
+        else:
+            cmdline = 'dig "%s" +noall +answer +nomultiline' % host
+        job = Job(lane, cmdline, self)
+        self.jobs[lane] = job
+        job.start()
+        self.sysmsg("QUICK LANE %s:  %s" % (lane.upper(), cmdline))
+
+    @staticmethod
+    def _is_path(val):
+        if val.startswith("/"):
+            return True
+        if not re.match(r"^[A-Za-z]:[\\/]", val):
+            return False
+        try:
+            return os.path.exists(val)
+        except Exception:
+            return True
+
     def _reveal_toggle(self, row, show):
         row["revealed"] = show
         det = row.get("secret", "") if show else mask_secret(row.get("secret", ""))
@@ -1201,6 +1336,7 @@ class App(tk.Tk):
         self.deck.set(row["iid"],
                       values=(ENGINES[row["eng"]]["glyph"], row["find"],
                               row["val"], row["det"]))
+        self._inspect_fill()
 
     def _remove_row(self, row):
         eng = row["eng"]
@@ -1211,6 +1347,7 @@ class App(tk.Tk):
             t.count = self.find_counts[eng]
         self.find_rows.pop(row["iid"], None)
         self.deck.delete(row["iid"])
+        self._inspect_fill()
         self._update_deck_chip()
         self._update_ledger()
 
@@ -1331,6 +1468,15 @@ class App(tk.Tk):
             if not val:
                 self.sysmsg("unfilled <placeholder> - type the %s in the TARGET box (or BROWSE a file)"
                             % ENGINES[key]["pivot_hint"])
+                return
+            ph = ENGINES[key]["ph"]
+            if ph in ("<file>", "<target-dir>") and not self._is_path(val):
+                self.sysmsg("%s scans FILES/FOLDERS - use BROWSE; '%s' does not "
+                            "look like a path" % (ENGINES[key]["name"], val))
+                return
+            if ph == "<domain>" and "." not in val:
+                self.sysmsg("%s wants a DOMAIN like site.com - '%s' has no dot "
+                            "(names go to Sherlock)" % (ENGINES[key]["name"], val))
                 return
             cmdline = re.sub(r"<[^>]+>", val, cmdline, count=1)
             self.cmdvar.set(cmdline)
