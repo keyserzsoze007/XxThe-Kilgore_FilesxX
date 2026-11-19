@@ -20,7 +20,7 @@ dashboard, Frida live hooks, Impacket network, Hashcat crack. Same Kali
 (WSL) engine host, hex-tile cockpit, live meters.
 Full detail in `HexJacked/README.md`.
 
-### XXxVector_SourcingxXX (v1.0.0)
+### XXxVector_SourcingxXX (v1.1.0)
 The flagship reconnaissance & OSINT command deck — Sherlock usernames,
 theHarvester emails/hosts, Amass attack surface, ExifTool metadata,
 Gitleaks secrets. A vertical hunter rail feeds one interactive FINDINGS

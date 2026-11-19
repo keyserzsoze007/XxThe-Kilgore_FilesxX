@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.0.0"
+APP_VER = "1.1.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -756,6 +756,15 @@ class App(tk.Tk):
                                     values=[ENGINES[k]["name"] for k in ENGINE_ORDER], width=11)
         self.toolbox.pack(side="left", padx=(4, 0), pady=8)
         self.toolbox.bind("<<ComboboxSelected>>", lambda e: self._on_toolbox())
+        tk.Label(bar, text="  TARGET", bg=PANEL, fg=DIM,
+                 font=("Segoe UI", 8, "bold")).pack(side="left")
+        self.targetvar = tk.StringVar()
+        self.target_entry = tk.Entry(bar, textvariable=self.targetvar, width=16,
+                                     bg=PANEL2, fg=AMBER, insertbackground=AMBER,
+                                     relief="flat", font=("Consolas", 10))
+        self.target_entry.pack(side="left", padx=(4, 0), pady=8)
+        self.target_entry.bind("<Return>", lambda e: self.run_selected())
+        self.targetvar.trace_add("write", lambda *a: self._on_target())
         tk.Label(bar, text="  COMMAND", bg=PANEL, fg=DIM,
                  font=("Segoe UI", 8, "bold")).pack(side="left")
         self.cmdvar = tk.StringVar(value=ENGINES[self.selected]["preset"])
@@ -1275,6 +1284,7 @@ class App(tk.Tk):
                                       (ENGINES[key]["preset"],))
         if not self.jobs.get(key):
             self.cmdvar.set(ENGINES[key]["preset"])
+        self._on_target()
 
     def _on_toolbox(self):
         name = self.toolvar.get()
@@ -1293,9 +1303,14 @@ class App(tk.Tk):
             self.sysmsg("command is empty")
             return
         if re.search(r"<[^>]+>", cmdline):
-            self.sysmsg("unfilled <placeholder> - type the %s or BROWSE a file"
-                        % ENGINES[key]["pivot_hint"])
-            return
+            val = self.targetvar.get().strip() if getattr(self, "targetvar", None) else ""
+            if not val:
+                self.sysmsg("unfilled <placeholder> - type the %s in the TARGET box (or BROWSE a file)"
+                            % ENGINES[key]["pivot_hint"])
+                return
+            cmdline = re.sub(r"<[^>]+>", val, cmdline, count=1)
+            self.cmdvar.set(cmdline)
+            self.sysmsg("TARGET box filled in: %s" % val)
         job = Job(key, cmdline, self)
         self.jobs[key] = job
         t = self.tabs[key]
@@ -1311,6 +1326,21 @@ class App(tk.Tk):
             return
         job.stop()
         self.sysmsg("STOP sent to %s" % ENGINES[self.selected]["name"])
+
+    def _on_target(self, *args):
+        if not getattr(self, "targetvar", None):
+            return
+        val = self.targetvar.get().strip()
+        cur = self.cmdvar.get()
+        if not val:
+            if re.search(r"<[^>]+>", cur):
+                self.cmdvar.set(ENGINES[self.selected]["preset"])
+            return
+        if re.search(r"<[^>]+>", cur):
+            self.cmdvar.set(re.sub(r"<[^>]+>", val, cur, count=1))
+        else:
+            toks = cur.split(" ")
+            self.cmdvar.set(" ".join([toks[0], '"%s"' % val] + toks[1:]))
 
     def talk_send(self):
         key = self.selected
