@@ -21,7 +21,7 @@ from tkinter import filedialog
 import webbrowser
 
 APP_NAME = "HexJacked"
-APP_VER = "1.0.0"
+APP_VER = "1.1.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -440,6 +440,95 @@ def sigbar(pct):
     return "#" * n + "-" * (5 - n) + " %d%%" % (pct or 0)
 
 
+SEV_RANK = {"CRITICAL": 4, "ERROR": 3, "HIGH": 3, "WARNING": 2, "MEDIUM": 2,
+            "INFO": 1, "LOW": 1}
+
+CHAIN_TEMPLATE = (
+    "rm -rf /tmp/hexjacked-out; "
+    "jadx -d /tmp/hexjacked-out \"<file>\" > /tmp/hex-jadx.log 2>&1; JX=$?; "
+    "if [ -d /tmp/hexjacked-out/sources ]; then SRC=/tmp/hexjacked-out/sources; "
+    "else SRC=/tmp/hexjacked-out; fi; "
+    "mobsfscan --json \"$SRC\" > /tmp/hex-findings.json 2>>/tmp/hex-jadx.log; MB=$?; "
+    "NJ=$(find /tmp/hexjacked-out -name '*.java' 2>/dev/null | wc -l); "
+    "echo HEX_CHAIN jadx_rc=$JX mobsfscan_rc=$MB java_files=$NJ; exit 0"
+)
+
+FETCH_SCRIPT = (
+    "J=/tmp/hex-findings.json; "
+    "if [ -f \"$J\" ]; then "
+    "echo NJAVA=$(find /tmp/hexjacked-out -name '*.java' 2>/dev/null | wc -l); "
+    "echo JSONB64=$(base64 -w0 \"$J\"); "
+    "else echo NO_JSON; fi"
+)
+
+FPRINT_SCRIPT = (
+    "p=%s; "
+    "echo SIZE=$(stat -c '%%s' \"$p\"); "
+    "echo MD5=$(md5sum \"$p\" | cut -d' ' -f1); "
+    "echo SHA256=$(sha256sum \"$p\" | cut -d' ' -f1); "
+    "echo MIME=$(file -b --mime-type \"$p\")"
+)
+
+
+def wsl_unc(path):
+    return "\\\\wsl.localhost\\" + DISTRO + path.replace("/", "\\")
+
+
+def parse_mobsfscan_json(js):
+    """mobsfscan --json (live format 1.2.0): results = {rule_id: {
+    files: [{file_path, match_lines, match_position, match_string}],
+    metadata: {severity, description, owasp-mobile, masvs, reference}}}.
+    Policy rules carry metadata only. Returns flat finding dicts."""
+    out = []
+    try:
+        d = json.loads(js)
+    except Exception as e:
+        return [{"rule": "PARSE-ERROR", "sev": "WARNING", "rank": 0,
+                 "file": "", "ln": "", "match": "", "meta": {}, "files": 0,
+                 "msg": "findings json unreadable: %s" % e,
+                 "ref": ""}]
+    n_err = len(d.get("errors") or [])
+    rs = d.get("results")
+    if not isinstance(rs, dict):
+        rs = {}
+    for rule in rs:
+        v = rs[rule]
+        if not isinstance(v, dict):
+            continue
+        md = v.get("metadata") or {}
+        sev = (md.get("severity") or "INFO").upper()
+        rank = SEV_RANK.get(sev, 1)
+        desc = md.get("description") or ""
+        files = v.get("files")
+        if isinstance(files, list) and files:
+            for f in files:
+                ml = f.get("match_lines") or [0]
+                out.append({"rule": rule, "sev": sev, "rank": rank,
+                            "file": f.get("file_path") or "",
+                            "ln": ml[0], "match": f.get("match_string") or "",
+                            "meta": md, "files": 1, "msg": desc,
+                            "ref": md.get("reference") or ""})
+        else:
+            out.append({"rule": rule, "sev": sev, "rank": rank,
+                        "file": "", "ln": "", "match": "", "meta": md,
+                        "files": 0, "msg": desc,
+                        "ref": md.get("reference") or ""})
+    if n_err:
+        out.append({"rule": "SCAN-ERRORS", "sev": "WARNING", "rank": 0,
+                    "file": "", "ln": "", "match": "", "meta": {},
+                    "files": 0, "msg": "%d engine error(s) inside the scan"
+                    % n_err, "ref": ""})
+    out.sort(key=lambda r: (-r["rank"], r["rule"], r["file"]))
+    return out
+
+
+def finding_rowvals(f):
+    fb = os.path.basename(f["file"]) if f["file"] else "(policy)"
+    match = (f["match"] or f["msg"] or "").strip()
+    match = " ".join(match.split())[:80]
+    return (f["sev"], f["rule"], fb, str(f["ln"]), match)
+
+
 def parse_wlan_scan(text):
     entries = []
     cur = None
@@ -705,8 +794,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("%s %s" % (APP_NAME, APP_VER))
         self.configure(bg=BG)
-        self.geometry("1280x820")
-        self.minsize(1120, 700)
+        self.geometry("1400x%d" % min(860, max(700, self.winfo_screenheight() - 64)))
+        self.minsize(1200, 700)
         self._alive = True
         self.probe_running = False
 
@@ -723,6 +812,13 @@ class App(tk.Tk):
         self.lines_out = 0
         self._last_bytes = 0
         self._probe_seen = 0
+        self.findings = []
+        self.deck_rows = {}
+        self.deck_filter = "ALL"
+        self.last_file = ""
+        self.last_file_wsl = ""
+        self._chain_pending = False
+        self._fprint_busy = False
 
         self._build()
         self._style_combos()
@@ -811,7 +907,8 @@ class App(tk.Tk):
 
         right = tk.Frame(self, bg=BG)
         right.grid(row=1, column=1, sticky="nsew", padx=(6, 14))
-        right.rowconfigure(2, weight=1)
+        right.rowconfigure(2, weight=6)
+        right.rowconfigure(3, weight=2)
         right.columnconfigure(0, weight=1)
 
         bar = tk.Frame(right, bg=PANEL)
@@ -860,12 +957,110 @@ class App(tk.Tk):
             lamp.pack(side="left", padx=(8, 0), pady=8)
             self.stage_lamps[k] = lamp
 
-        conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
-        conwrap.grid(row=2, column=0, sticky="nsew")
+        deckwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1,
+                            highlightbackground=EDGE2)
+        deckwrap.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
+        deckwrap.rowconfigure(2, weight=1)
+        deckwrap.columnconfigure(0, weight=1)
+        dhead = tk.Frame(deckwrap, bg=PANEL)
+        dhead.grid(row=0, column=0, sticky="ew")
+        tk.Label(dhead, text=" FINDINGS DECK", bg=PANEL, fg=TURQ,
+                 font=("Segoe UI", 9, "bold")).pack(side="left", pady=6)
+        self.deck_chip = tk.Label(dhead, text="0 rows", bg=PANEL2, fg=DIM,
+                                  font=("Consolas", 8, "bold"), padx=8, pady=1)
+        self.deck_chip.pack(side="left", pady=6)
+        self.deck_filters = {}
+        for name in ("ALL", "FIND", "POL"):
+            chip = tk.Label(dhead, text=" " + name + " ", bg=PANEL2, fg=DIM,
+                            font=("Consolas", 8, "bold"), padx=6, pady=1,
+                            cursor="hand2")
+            chip.pack(side="left", padx=(4, 0), pady=6)
+            chip.bind("<Button-1>", lambda e, n=name: self._deck_filter(n))
+            self.deck_filters[name] = chip
+        self.chain_btn = tk.Label(dhead, text=" AUTO CHAIN ", bg=blend(TURQ, BG, 0.82),
+                                  fg=BG, font=("Consolas", 9, "bold"), padx=10,
+                                  pady=6, cursor="hand2")
+        self.chain_btn.pack(side="right", padx=(4, 2), pady=6)
+        self.chain_btn.bind("<Button-1>", lambda e: self._auto_chain())
+        self.open_src_btn = tk.Label(dhead, text=" OPEN SOURCE ", bg=PANEL2, fg=BLUE,
+                                     font=("Consolas", 9, "bold"), padx=10, pady=6,
+                                     cursor="hand2")
+        self.open_src_btn.pack(side="right", padx=(4, 0), pady=6)
+        self.open_src_btn.bind("<Button-1>", lambda e: self._open_source())
+        self.deck_clear_btn = tk.Label(dhead, text=" CLEAR ", bg=PANEL2, fg=DIM,
+                                       font=("Consolas", 9, "bold"), padx=8,
+                                       pady=6, cursor="hand2")
+        self.deck_clear_btn.pack(side="right", pady=6)
+        self.deck_clear_btn.bind("<Button-1>", lambda e: self._deck_clear())
+        self.fp_chip = tk.Label(
+            deckwrap,
+            text=" no file browsed yet - BROWSE arms the chain and fingerprints it",
+            bg=PANEL, fg=DIM, anchor="w", font=("Consolas", 8))
+        self.fp_chip.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 2))
+        decksplit = tk.Frame(deckwrap, bg=BG)
+        decksplit.grid(row=2, column=0, sticky="nsew", padx=10, pady=(2, 10))
+        decksplit.columnconfigure(0, weight=3, minsize=440)
+        decksplit.columnconfigure(1, weight=1, minsize=300)
+        decksplit.rowconfigure(0, weight=1)
+        self.deck = ttk.Treeview(decksplit,
+                                 columns=("sev", "rule", "file", "ln", "match"),
+                                 show="headings", style="Deck.Treeview", height=6)
+        for cid, txt, w in (("sev", "SEV", 80), ("rule", "RULE", 140),
+                            ("file", "FILE", 170), ("ln", "LN", 40),
+                            ("match", "MATCH", 180)):
+            self.deck.heading(cid, text=txt)
+            self.deck.column(cid, width=w, anchor="w",
+                             stretch=(cid in ("file", "match")))
+        dvsb = ttk.Scrollbar(decksplit, orient="vertical", command=self.deck.yview)
+        dhsb = ttk.Scrollbar(decksplit, orient="horizontal", command=self.deck.xview)
+        self.deck.configure(yscrollcommand=dvsb.set, xscrollcommand=dhsb.set)
+        self.deck.grid(row=0, column=0, sticky="nsew")
+        dvsb.grid(row=0, column=1, sticky="ns")
+        dhsb.grid(row=1, column=0, sticky="ew")
+        self.deck.bind("<<TreeviewSelect>>", self._on_deck_select)
+        self.deck.bind("<Double-Button-1>", self._on_deck_dbl)
+        viewwrap = tk.Frame(decksplit, bg=PANEL)
+        viewwrap.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
+        vhead = tk.Frame(viewwrap, bg=PANEL)
+        vhead.pack(fill="x")
+        tk.Label(vhead, text="FINDING CONTENT", bg=PANEL, fg=TURQ,
+                 font=("Segoe UI", 9, "bold")).pack(side="left", pady=4)
+        self.view_chip = tk.Label(vhead, text="empty", bg=PANEL2, fg=DIM,
+                                  font=("Consolas", 8), padx=6, pady=1)
+        self.view_chip.pack(side="left", padx=6)
+        vacts = tk.Frame(viewwrap, bg=PANEL)
+        vacts.pack(fill="x", pady=(0, 4))
+        for txt, fn, col in (("COPY TEXT", self._copy_finding_text, TURQ),
+                             ("COPY PATH", self._copy_finding_path, BLUE),
+                             ("OPEN FILE", self._open_finding_file, BLUE)):
+            b = tk.Label(vacts, text=" " + txt + " ", bg=PANEL2, fg=col,
+                         font=("Consolas", 8, "bold"), padx=8, pady=3,
+                         cursor="hand2")
+            b.pack(side="left", padx=(0, 4))
+            b.bind("<Button-1>", lambda e, f=fn: f())
+        self.viewer = tk.Text(viewwrap, bg=PANEL, fg=TXT, wrap="word",
+                              insertbackground=TURQ, relief="flat", bd=0,
+                              font=("Consolas", 9), width=42, height=5,
+                              state="disabled")
+        self.viewer.pack(fill="both", expand=True)
+        self.viewer.tag_configure("hdr", foreground=TURQ,
+                                  font=("Consolas", 9, "bold"))
+        self.viewer.tag_configure("err", foreground=RED)
+        self.viewer.tag_configure("wrn", foreground=AMBER)
+        self.viewer.tag_configure("dim", foreground=DIM)
+        self.viewer.tag_configure("body", foreground=TXT)
+        self.viewer.configure(state="normal")
+        self.viewer.insert("end", "click a deck row - the matched code line\n"
+                           "and the why behind it opens here", "dim")
+        self.viewer.configure(state="disabled")
+
+        conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1,
+                           highlightbackground=EDGE2)
+        conwrap.grid(row=3, column=0, sticky="nsew")
         self.console = tk.Text(conwrap, bg=PANEL, fg=TXT, wrap="none",
                                insertbackground=TURQ, selectbackground=BLUE,
                                font=("Consolas", 10), bd=0, padx=12, pady=8,
-                               state="disabled", relief="flat")
+                               height=10, state="disabled", relief="flat")
         csb = ttk.Scrollbar(conwrap, command=self.console.yview)
         self.console.configure(yscrollcommand=csb.set)
         self.console.pack(fill="both", expand=True, side="left")
@@ -879,7 +1074,7 @@ class App(tk.Tk):
                                    font=("Consolas", 10, "bold"))
 
         talk = tk.Frame(right, bg=PANEL)
-        talk.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        talk.grid(row=4, column=0, sticky="ew", pady=(6, 0))
         self.talk_lbl = tk.Label(talk, text=" TALK TO %s " % TOOLS[self.selected]["name"],
                                  bg=PANEL2, fg=TURQ, font=("Consolas", 9, "bold"),
                                  padx=6, pady=2)
@@ -898,7 +1093,7 @@ class App(tk.Tk):
         self.talk_btn.bind("<Button-1>", lambda e: self.talk_send())
 
         meters = tk.Frame(right, bg=BG)
-        meters.grid(row=4, column=0, sticky="ew", pady=(8, 0))
+        meters.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         self.g_cpu = Gauge(meters, "HOST CPU", TURQ)
         self.g_cpu.pack(side="left")
         self.g_ram = Gauge(meters, "HOST RAM", BLUE)
@@ -931,6 +1126,13 @@ class App(tk.Tk):
         style.configure("Net.Treeview.Heading", background=PANEL2, foreground=DIM,
                         relief="flat", font=("Segoe UI", 8, "bold"))
         style.map("Net.Treeview",
+                  background=[("selected", blend(TURQ, BG, 0.7))],
+                  foreground=[("selected", BG)])
+        style.configure("Deck.Treeview", background=PANEL, fieldbackground=PANEL,
+                        foreground=TXT, rowheight=24, borderwidth=0)
+        style.configure("Deck.Treeview.Heading", background=PANEL2, foreground=DIM,
+                        relief="flat", font=("Segoe UI", 8, "bold"))
+        style.map("Deck.Treeview",
                   background=[("selected", blend(TURQ, BG, 0.7))],
                   foreground=[("selected", BG)])
 
@@ -992,6 +1194,20 @@ class App(tk.Tk):
                         t.status_kind = "fail"
                         t.rc = rc
                     self.sysmsg("%s engine finished (exit %s)" % (TOOLS[key]["name"], rc))
+                    if job is not None and not job.stopped:
+                        if key == "jadx" and getattr(self, "_chain_pending", False):
+                            self._chain_pending = False
+                            self.sysmsg("auto chain finished - pulling findings "
+                                        "json from the box...")
+                            self.fetch_findings()
+                        elif key == "mobsfscan" and "--json" in job.cmdline:
+                            self.sysmsg("mobsfscan --json finished - pulling "
+                                        "findings json...")
+                            self.fetch_findings()
+                elif kind == "fprint":
+                    self._apply_fprint(item[1])
+                elif kind == "findings":
+                    self._apply_findings(item[1])
                 elif kind == "probe":
                     self.probe_running = False
                     self._apply_probe(item[1])
@@ -1126,6 +1342,9 @@ class App(tk.Tk):
         else:
             self.cmdvar.set(cur + ' "' + wp + '"')
         self.sysmsg("target loaded: %s" % wp)
+        self.last_file = p
+        self.last_file_wsl = wp
+        self.fingerprint(wp)
 
     def open_dashboard(self):
         running = self.jobs.get("mobsf") is not None
@@ -1149,6 +1368,240 @@ class App(tk.Tk):
                 lamp.configure(bg=TURQ, fg=PANEL)
             else:
                 lamp.configure(bg=PANEL2, fg=DIM)
+
+    # ---------- findings deck ----------
+    def _deck_filter(self, name):
+        self.deck_filter = name
+        self._deck_render("filter " + name)
+
+    def _deck_filter_colors(self):
+        for n, chip in self.deck_filters.items():
+            chip.configure(fg=TURQ if n == self.deck_filter else DIM)
+
+    def _deck_load(self, rows, label):
+        self.findings = rows
+        self._deck_render(label)
+
+    def _deck_render(self, label):
+        self.deck_rows = {}
+        self.deck.delete(*self.deck.get_children())
+        rows = self.findings
+        if self.deck_filter == "FIND":
+            rows = [r for r in rows if r["files"]]
+        elif self.deck_filter == "POL":
+            rows = [r for r in rows if not r["files"]]
+        for i, f in enumerate(rows):
+            iid = str(i)
+            self.deck_rows[iid] = f
+            self.deck.insert("", "end", iid=iid, values=finding_rowvals(f))
+        nf = sum(1 for r in self.findings if r["files"])
+        np = len(self.findings) - nf
+        self.deck_chip.configure(text="%d rows (%d file / %d policy) - %s" % (
+            len(rows), nf, np, label))
+        self._deck_filter_colors()
+
+    def _on_deck_select(self, _e=None):
+        sel = self.deck.selection()
+        if not sel or sel[0] not in self.deck_rows:
+            return
+        self._fill_viewer(self.deck_rows[sel[0]])
+
+    def _on_deck_dbl(self, _e=None):
+        return None
+
+    def _deck_clear(self):
+        self._deck_load([], "cleared")
+
+    def _cur_finding(self):
+        sel = self.deck.selection()
+        if sel and sel[0] in self.deck_rows:
+            return self.deck_rows[sel[0]]
+        return None
+
+    def _fill_viewer(self, f):
+        self.viewer.configure(state="normal")
+        self.viewer.delete("1.0", "end")
+        if not f:
+            self.viewer.insert("end", "click a deck row", "dim")
+            self.viewer.configure(state="disabled")
+            self.view_chip.configure(text="empty")
+            return
+        sevtag = "err" if f["sev"] in ("ERROR", "HIGH", "CRITICAL") else \
+            ("wrn" if f["sev"] == "WARNING" else "dim")
+        md = f.get("meta") or {}
+        self.viewer.insert("end", "RULE  %s\n" % f["rule"], "hdr")
+        self.viewer.insert("end", "SEV   %s\n" % f["sev"], sevtag)
+        if md.get("owasp-mobile"):
+            self.viewer.insert("end", "OWASP %s\n" % md.get("owasp-mobile"), "dim")
+        if md.get("masvs"):
+            self.viewer.insert("end", "MASVS %s\n" % md.get("masvs"), "dim")
+        if f.get("file"):
+            self.viewer.insert("end", "FILE  %s   LINE %s\n" % (f["file"], f["ln"]),
+                               "dim")
+            self.viewer.insert("end", "UNC   %s\n" % wsl_unc(f["file"]), "dim")
+        if f.get("match"):
+            self.viewer.insert("end", "----- MATCHED LINE -----\n", "hdr")
+            self.viewer.insert("end", f["match"].rstrip("\n") + "\n", "body")
+        if f.get("msg"):
+            self.viewer.insert("end", "----- WHY -----\n", "hdr")
+            self.viewer.insert("end", f["msg"].rstrip("\n") + "\n", "body")
+        if f.get("ref"):
+            self.viewer.insert("end", "REF   %s\n" % f["ref"], "dim")
+        self.viewer.configure(state="disabled")
+        self.view_chip.configure(text=f["rule"][:30])
+
+    def _copy_finding_text(self):
+        f = self._cur_finding()
+        if not f:
+            self.sysmsg("pick a deck row first")
+            return
+        piece = f.get("match") or f.get("msg") or ""
+        loc = ""
+        if f.get("file"):
+            loc = "\n%s: line %s" % (f["file"], f["ln"])
+        self.clipboard_clear()
+        self.clipboard_append("[%s %s] %s%s" % (f["sev"], f["rule"], piece, loc))
+        self.sysmsg("copied finding text: %s" % f["rule"])
+
+    def _copy_finding_path(self):
+        f = self._cur_finding()
+        if not f:
+            self.sysmsg("pick a deck row first")
+            return
+        if not f.get("file"):
+            self.sysmsg("policy finding - no file path to copy")
+            return
+        self.clipboard_clear()
+        self.clipboard_append("%s: %s" % (f["file"], f["ln"]))
+        self.sysmsg("copied path: %s:%s" % (f["file"], f["ln"]))
+
+    def _open_finding_file(self):
+        f = self._cur_finding()
+        if not f:
+            self.sysmsg("pick a deck row first")
+            return
+        if not f.get("file"):
+            self.sysmsg("policy finding - no file to open")
+            return
+        unc = wsl_unc(f["file"])
+        if not os.path.exists(unc):
+            self.sysmsg("file not visible over wsl UNC: %s" % unc)
+            return
+        try:
+            subprocess.Popen(["notepad.exe", unc],
+                             creationflags=CREATE_NO_WINDOW)
+            self.sysmsg("opened in notepad: %s" % unc)
+        except Exception as e:
+            self.sysmsg("open failed: %s" % e)
+
+    def _open_source(self):
+        unc = wsl_unc("/tmp/hexjacked-out")
+        if not os.path.exists(unc):
+            self.sysmsg("no decompiled tree on the box - run AUTO CHAIN first")
+            return
+        try:
+            os.startfile(unc)
+            self.sysmsg("opening decompiled sources: %s" % unc)
+        except Exception as e:
+            self.sysmsg("open source failed: %s" % e)
+
+    def _auto_chain(self):
+        apk = self.last_file_wsl
+        if not apk:
+            self.sysmsg("BROWSE an apk/dex/jar first - AUTO CHAIN decompiles it "
+                        "then mobsfscans the decompiled sources into the deck")
+            return
+        if self.jobs.get("jadx"):
+            self.sysmsg("JADX tile is busy - STOP it first, then chain")
+            return
+        cmdline = CHAIN_TEMPLATE.replace("<file>", apk)
+        job = Job("jadx", cmdline, self)
+        self.jobs["jadx"] = job
+        t = self.tiles["jadx"]
+        t.status_kind = "run"
+        t.rc = None
+        t.elapsed = "00:00"
+        self._chain_pending = True
+        job.start()
+        self.sysmsg("AUTO CHAIN launched on %s: jadx decompile -> mobsfscan "
+                    "--json over the sources -> findings deck" % apk)
+
+    def fetch_findings(self):
+        def work():
+            rc, out = run_wsl_b64(FETCH_SCRIPT, 120)
+            payload = None
+            njava = None
+            m = re.search(r"JSONB64=([A-Za-z0-9+/=]+)", out)
+            if m:
+                try:
+                    payload = base64.b64decode(m.group(1)).decode("utf-8",
+                                                                  "replace")
+                except Exception:
+                    payload = None
+            mj = re.search(r"NJAVA=(\d+)", out)
+            if mj:
+                njava = int(mj.group(1))
+            self.put(("findings", {"json": payload, "njava": njava, "rc": rc}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _apply_findings(self, d):
+        rows = []
+        payload = d.get("json")
+        if payload:
+            rows = parse_mobsfscan_json(payload)
+        if d.get("njava") is not None:
+            rows.append({"rule": "JADX-SUMMARY", "sev": "INFO", "rank": 0,
+                         "file": "", "ln": "", "match": "", "meta": {},
+                         "files": 0,
+                         "msg": "auto chain: %d java sources decompiled"
+                         % d["njava"], "ref": ""})
+        self._deck_load(rows, "auto chain" if rows or d.get("njava")
+                        else "no json on the box")
+        if not rows:
+            self.sysmsg("no findings json found - BROWSE the apk, then AUTO "
+                        "CHAIN (decompile + scan in one run)")
+
+    def fingerprint(self, wp):
+        if not wp:
+            return
+        if self._fprint_busy:
+            self.sysmsg("fingerprint busy - one file at a time")
+            return
+        self._fprint_busy = True
+        name = self.last_file and os.path.basename(self.last_file) or wp
+        if name and os.path.basename(name) == name:
+            shown = name
+        else:
+            shown = wp
+        self.fp_chip.configure(text=" fingerprinting %s ..." % shown)
+
+        def work():
+            rc, out = run_wsl_b64(FPRINT_SCRIPT % shq(wp), 60)
+            d = {}
+            for line in out.splitlines():
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    d[k.strip()] = v.strip()
+            self._fprint_busy = False
+            self.put(("fprint", d if d else {"ERR": out[-200:] or "rc=%d" % rc}))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _apply_fprint(self, d):
+        if d.get("ERR"):
+            self.fp_chip.configure(
+                text=" fingerprint failed: %s" % (d["ERR"][-160:],))
+            return
+        try:
+            size = int(d.get("SIZE") or 0)
+        except Exception:
+            size = 0
+        md5v = d.get("MD5") or ""
+        shav = d.get("SHA256") or ""
+        mime = d.get("MIME") or "?"
+        name = self.last_file and os.path.basename(self.last_file) or "file"
+        self.fp_chip.configure(text=" %s   %s   md5 %s..%s   sha256 %s..%s   %s" % (
+            name, fmt_bytes(size), md5v[:12], md5v[-4:],
+            shav[:12], shav[-4:], mime))
 
     # ---------- engines ----------
     def probe_engines(self):
@@ -1206,12 +1659,14 @@ class App(tk.Tk):
             self.sysmsg("%s slot busy - STOP it first for a reinstall"
                         % TOOLS[slot]["name"])
             return
-        self.sysmsg("INSTALL: apt %s + pip frida-tools/mobsfscan "
+        self.sysmsg("INSTALL: apt %s + pip frida-tools/mobsfscan/rich-fix "
                     "(long haul - watch the stream)" % INSTALL_PKGS)
         script = ("export DEBIAN_FRONTEND=noninteractive; "
                   "apt-get update -y; "
                   "apt-get install -y --no-install-recommends %s; "
                   "pip3 install --break-system-packages frida-tools mobsfscan; "
+                  "pip3 install --break-system-packages --quiet --upgrade "
+                  "--user rich; "
                   "echo INSTALL_DONE_RC=$?" % INSTALL_PKGS)
         job = Job(slot, script, self)
         self.jobs[slot] = job

@@ -2,10 +2,16 @@
 
 **CREATED BY XxREPTILExX & XxNEOPAULxX**
 
-HexJacked v1.0.0 - the mobile & binary workbench. A Windows GUI that drives
+HexJacked v1.1.0 - the mobile & binary workbench. A Windows GUI that drives
 five engines inside the Kali Linux WSL distro (`kali-linux`), in engagement
 order, with live streaming console, meters, and an interactive TALK strip.
-Built 2026-11-18 on PAUL-MOBILE.
+Built 2026-11-18 on PAUL-MOBILE. v1.1.0 (2026-11-19): FINDINGS DECK upgrade -
+AUTO CHAIN (one click decompiles your APK then static-scans the decompiled
+sources), every finding clickable into a FINDING CONTENT viewer, per-file
+fingerprints (size / md5 / sha256 / mime) on BROWSE, and a self-healing
+rich fix baked into FIX / INSTALL ENGINES (the shadowed user-level rich
+that starved mobsfscan's file-level scans on this box is upgraded during
+install).
 
 ## The five, in run order
 
@@ -32,11 +38,19 @@ Built 2026-11-18 on PAUL-MOBILE.
    Windows path to `/mnt/c/...` and fills its `<placeholder>` in the command.
 4. **RUN**. The console streams while it works; **FLOW** lamps light up per
    stage (blue = running, turquoise = finished clean).
-5. **TALK strip** (under the console) sends stdin into the running engine -
+5. **AUTO CHAIN** (deck head, one click): decompiles the BROWSEd APK into
+   `/tmp/hexjacked-out`, then `mobsfscan --json` scans the decompiled
+   sources - findings land in the **FINDINGS DECK**. Click a row: the
+   matched code line plus the why behind it open in **FINDING CONTENT**
+   (COPY TEXT / COPY PATH / OPEN FILE). Filter chips ALL / FIND / POL.
+6. **OPEN SOURCE** jumps Windows Explorer into the decompiled tree
+   (`\\wsl.localhost\kali-linux\tmp\hexjacked-out`).
+7. **TALK strip** (under the console) sends stdin into the running engine -
    Frida REPL, impacket sessions, MobSF prompts. Your lines echo blue.
-6. **DASHBOARD** opens the MobSF web UI (start the MobSF server tile first).
-7. `STOP` kills the engine inside WSL. `WSL CONSOLE` opens a full terminal.
-8. `FIX / INSTALL ENGINES` reruns apt + pip install if anything is missing.
+8. **DASHBOARD** opens the MobSF web UI (start the MobSF server tile first).
+9. `STOP` kills the engine inside WSL. `WSL CONSOLE` opens a full terminal.
+10. `FIX / INSTALL ENGINES` reruns apt + pip install if anything is missing
+    (includes the rich fix that keeps mobsfscan's file-level scans alive).
 
 ## Notes
 
