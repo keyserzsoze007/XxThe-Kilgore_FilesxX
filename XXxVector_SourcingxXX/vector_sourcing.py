@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.1.0"
+APP_VER = "1.2.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -847,9 +847,13 @@ class App(tk.Tk):
             self.deck.heading(cid, text=txt)
             self.deck.column(cid, width=w, anchor="w", stretch=stretch)
         vsb = ttk.Scrollbar(deckbody, command=self.deck.yview)
-        self.deck.configure(yscrollcommand=vsb.set)
-        self.deck.pack(side="left", fill="both", expand=True)
+        hsb = ttk.Scrollbar(deckbody, orient="horizontal", command=self.deck.xview)
+        self.deck.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        hsb.pack(side="bottom", fill="x")
         vsb.pack(fill="y", side="right")
+        self.deck.pack(side="left", fill="both", expand=True)
+        self.deck.bind("<MouseWheel>", self._deck_wheel, add="+")
+        self.deck.bind("<Shift-MouseWheel>", self._deck_wheel, add="+")
         self.deck.bind("<Button-1>", self._on_deck_release)
         self.deck.bind("<Double-1>", lambda e: self.deck_action(self._sel_row(),
                                                                 default=True))
@@ -930,6 +934,15 @@ class App(tk.Tk):
         style.map("Deck.Treeview",
                   background=[("selected", blend(TURQ, BG, 0.7))],
                   foreground=[("selected", BG)])
+        for orient in ("Vertical", "Horizontal"):
+            style.configure(orient + ".TScrollbar",
+                            background=blend(DIM, PANEL2, 0.5),
+                            troughcolor=PANEL, bordercolor=EDGE2,
+                            arrowcolor=DIM, lightcolor=EDGE2,
+                            darkcolor=EDGE2)
+            style.map(orient + ".TScrollbar",
+                      background=[("active", blend(DIM, PANEL2, 0.85)),
+                                  ("pressed", TURQ)])
 
     # ------------------------------------------------------------ console
     def console_append(self, engine_key, text, tag=None):
@@ -1071,6 +1084,16 @@ class App(tk.Tk):
         if not sel or sel[0] not in self.find_rows:
             return None
         return self.find_rows[sel[0]]
+
+    def _deck_wheel(self, event):
+        d = event.delta
+        if not d:
+            return
+        if event.state & 0x0001:
+            self.deck.xview_scroll(int(1.3 * d / 120) * -16, "units")
+        else:
+            self.deck.yview_scroll(int(-2.0 * d / 120), "units")
+        return "break"
 
     def _on_deck_release(self, event):
         try:
