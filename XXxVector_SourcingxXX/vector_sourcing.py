@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.3.0"
+APP_VER = "1.4.0"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -666,6 +666,8 @@ class App(tk.Tk):
         self.configure(bg=BG)
         self.geometry("1400x860")
         self.minsize(1200, 720)
+        if self.winfo_screenwidth() >= 1366:
+            self.state("zoomed")
         self._alive = True
         self.probe_running = False
 
@@ -870,8 +872,14 @@ class App(tk.Tk):
                                   font=("Consolas", 8))
         self.deck_chip.pack(side="right")
 
-        deckbody = tk.Frame(deckwrap, bg=PANEL)
-        deckbody.grid(row=1, column=0, sticky="nsew")
+        decksplit = tk.Frame(deckwrap, bg=PANEL)
+        decksplit.grid(row=1, column=0, sticky="nsew")
+        decksplit.rowconfigure(0, weight=1)
+        decksplit.columnconfigure(0, weight=5, minsize=560)
+        decksplit.columnconfigure(1, weight=4, minsize=400)
+
+        deckbody = tk.Frame(decksplit, bg=PANEL)
+        deckbody.grid(row=0, column=0, sticky="nsew")
         self.deck = ttk.Treeview(deckbody, columns=("eng", "find", "val", "det"),
                                  show="headings", style="Deck.Treeview",
                                  selectmode="browse")
@@ -889,25 +897,52 @@ class App(tk.Tk):
         self.deck.bind("<MouseWheel>", self._deck_wheel, add="+")
         self.deck.bind("<Shift-MouseWheel>", self._deck_wheel, add="+")
         self.deck.bind("<Button-1>", self._on_deck_release)
-        self.deck.bind("<Double-1>", lambda e: self.deck_action(self._sel_row(),
-                                                                default=True))
-        inspwrap = tk.Frame(deckwrap, bg=PANEL2)
-        inspwrap.grid(row=2, column=0, sticky="ew")
-        tk.Label(inspwrap, text=" DETAIL", bg=PANEL2, fg=TURQ,
-                 font=("Segoe UI", 8, "bold")).pack(side="left", anchor="n",
-                                                    padx=(4, 0), pady=3)
-        self.inspector = tk.Text(inspwrap, bg=PANEL2, fg=TXT, wrap="char",
-                                 height=5, bd=0, padx=8, pady=4,
-                                 font=("Consolas", 9), relief="flat")
-        self.inspector.pack(side="left", fill="both", expand=True)
-        self.inspector.insert("1.0",
-                              " click a finding - everything it carries shows here")
-        self.inspector.configure(state="disabled")
+        self.deck.bind("<Double-1>", lambda e: self._viewer_open())
         self.deck.bind("<<TreeviewSelect>>", lambda e: self._inspect_fill())
-        hint = tk.Label(deckwrap, text=" click a finding: COPY / OPEN / COPY FULL / "
-                        "QUICK LANES / PIVOT  -  detail pane below stays live",
+
+        viewwrap = tk.Frame(decksplit, bg=PANEL2, highlightthickness=1,
+                            highlightbackground=EDGE2)
+        viewwrap.grid(row=0, column=1, sticky="nsew", padx=(1, 0))
+        viewwrap.rowconfigure(2, weight=1)
+        viewwrap.columnconfigure(0, weight=1)
+        viewhead = tk.Frame(viewwrap, bg=PANEL2)
+        viewhead.grid(row=0, column=0, sticky="ew")
+        tk.Label(viewhead, text=" FINDING CONTENT", bg=PANEL2, fg=TURQ,
+                 font=("Segoe UI", 10, "bold")).pack(side="left", pady=5)
+        self.view_chip = tk.Label(viewhead, text="double-click a finding -",
+                                  bg=PANEL2, fg=DIM, font=("Consolas", 8))
+        self.view_chip.pack(side="right", padx=6)
+        self._view_row = None
+        self._view_rawline = False
+        vbtn = tk.Frame(viewwrap, bg=PANEL2)
+        vbtn.grid(row=1, column=0, sticky="ew")
+        for label, fn, fg in (
+                (" OPEN ", self._view_open, TURQ),
+                (" UNMASK ", self._view_reveal, AMBER),
+                (" RAW LINE ", self._view_raw, AMBER),
+                (" PIVOT ", self._view_pivot, BLUE),
+                (" COPY VAL ", self._view_copy_val, GREEN),
+                (" COPY FULL ", self._view_copy_full, GREEN),
+                (" WHOIS ", lambda: self._view_lane("whois"), BLUE),
+                (" DIG ", lambda: self._view_lane("dig"), BLUE)):
+            b = tk.Label(vbtn, text=label, bg=PANEL, fg=fg,
+                         font=("Consolas", 8, "bold"), padx=7, pady=3,
+                         cursor="hand2")
+            b.pack(side="left", padx=(5, 0), pady=3)
+            b.bind("<Button-1>", lambda e, f=fn: f())
+        self.viewer = tk.Text(viewwrap, bg=PANEL, fg=TXT, wrap="char",
+                              bd=0, padx=10, pady=8, font=("Consolas", 10),
+                              relief="flat", state="disabled", takefocus=0)
+        self.viewer.grid(row=2, column=0, sticky="nsew")
+        self.viewer.configure(state="normal")
+        self.viewer.insert("1.0", " double-click a finding -\n its full content opens here")
+        self.viewer.configure(state="disabled")
+
+        hint = tk.Label(deckwrap, text=" click a finding: content lands on the right "
+                        "panel  -  double-click: full content + one-click actions "
+                        " OPEN / UNMASK / RAW LINE / PIVOT / COPY / WHOIS / DIG",
                         bg=PANEL, fg=DIM, font=("Segoe UI", 7, "italic"), anchor="w")
-        hint.grid(row=3, column=0, sticky="ew")
+        hint.grid(row=2, column=0, sticky="ew")
 
         conwrap = tk.Frame(right, bg=EDGE2, highlightthickness=1, highlightbackground=EDGE2)
         conwrap.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
@@ -1153,7 +1188,8 @@ class App(tk.Tk):
         except Exception:
             pass
         row = self._sel_row()
-        if row is not None:
+        if row is not None and \
+                time.time() - getattr(self, "_last_popup_ts", 0.0) >= 0.40:
             self.after(10, lambda: self.deck_action(row, default=False))
 
     def set_deck_filter(self, val):
@@ -1185,9 +1221,11 @@ class App(tk.Tk):
     def deck_action(self, row, default=False):
         if row is None:
             return
+        self._last_popup_ts = time.time()
         menu = tk.Menu(self, tearoff=0, bg=PANEL2, fg=TXT,
                        activebackground=BLUE, activeforeground=BG,
                        font=("Segoe UI", 9))
+        self._popup_menu = menu
         url = row.get("url")
         if url:
             menu.add_command(label=">> OPEN IN BROWSER", font=("Segoe UI", 9, "bold"),
@@ -1276,14 +1314,105 @@ class App(tk.Tk):
 
     def _inspect_fill(self):
         row = self._sel_row()
-        t = self.inspector
+        if row is None or self._view_row is None or \
+                row["iid"] != self._view_row["iid"]:
+            self._view_rawline = False
+        self._view_row = row
+        t = self.viewer
         t.configure(state="normal")
         t.delete("1.0", "end")
         if row is None:
-            t.insert("1.0", " click a finding - everything it carries shows here")
+            t.insert("1.0", " double-click a finding -\n its full content opens here")
+            self.view_chip.configure(text="double-click a finding -", fg=DIM)
         else:
             t.insert("1.0", self._finding_text(row))
+            if self._view_rawline and row.get("detail2"):
+                t.insert("end", "\n\n----- RAW LINE -----\n" + row["detail2"])
+            self.view_chip.configure(text="panel armed - actions live", fg=TURQ)
+        t.see("1.0")
         t.configure(state="disabled")
+
+    def _viewer_open(self):
+        row = self._sel_row()
+        if row is None:
+            self.sysmsg("nothing selected - double-click a finding on the deck")
+            return
+        self._view_row = None
+        self._view_rawline = False
+        m = getattr(self, "_popup_menu", None)
+        if m is not None:
+            try:
+                m.unpost()
+            except Exception:
+                pass
+            self._popup_menu = None
+        self._inspect_fill()
+        self.sysmsg("finding opened on the FINDING CONTENT panel")
+
+    def _view_msg(self):
+        row = self._view_row
+        if row is None:
+            self.sysmsg("panel is empty - double-click a finding first")
+        return row
+
+    def _view_open(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        if row.get("url"):
+            self._open_url(row["url"])
+        else:
+            self.sysmsg("no url on this finding - nothing to open")
+
+    def _view_reveal(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        if not row.get("secret"):
+            self.sysmsg("nothing masked on this finding")
+            return
+        self._reveal_toggle(row, not row.get("revealed"))
+
+    def _view_raw(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        if not row.get("detail2"):
+            self.sysmsg("no raw line stored on this finding")
+            return
+        self._view_rawline = not self._view_rawline
+        self._inspect_fill()
+        self.sysmsg("raw line %s on the panel"
+                    % ("shown" if self._view_rawline else "hidden"))
+
+    def _view_pivot(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        self.deck_action(row, default=False)
+
+    def _view_copy_val(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        self._copy_row(row, "val")
+
+    def _view_copy_full(self):
+        row = self._view_msg()
+        if row is None:
+            return
+        self._copy_detail(row)
+
+    def _view_lane(self, lane):
+        row = self._view_msg()
+        if row is None:
+            return
+        host = self._host_of(row)
+        if not host:
+            self.sysmsg("no host/domain inside this finding for %s"
+                        % lane.upper())
+            return
+        self._quick_lane(lane, host)
 
     def _copy_detail(self, row):
         self.clipboard_clear()
