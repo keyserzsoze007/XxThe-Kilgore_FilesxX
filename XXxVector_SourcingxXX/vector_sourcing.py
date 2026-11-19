@@ -26,7 +26,7 @@ from tkinter import messagebox
 import webbrowser
 
 APP_NAME = "XXxVector_SourcingxXX"
-APP_VER = "1.4.1"
+APP_VER = "1.4.2"
 CREATORS = ("XxREPTILExX", "XxNEOPAULxX")
 DISTRO = "kali-linux"
 
@@ -664,8 +664,8 @@ class App(tk.Tk):
         super().__init__()
         self.title("%s %s" % (APP_NAME, APP_VER))
         self.configure(bg=BG)
-        self.geometry("1400x860")
-        self.minsize(1200, 720)
+        self.geometry("1400x%d" % min(860, max(700, self.winfo_screenheight() - 64)))
+        self.minsize(1200, 700)
         self._alive = True
         self.probe_running = False
 
@@ -938,7 +938,8 @@ class App(tk.Tk):
                 b.bind("<Button-1>", lambda e, f=fn: f())
         self.viewer = tk.Text(viewwrap, bg=PANEL, fg=TXT, wrap="char",
                               bd=0, padx=10, pady=8, font=("Consolas", 10),
-                              relief="flat", state="disabled", takefocus=0)
+                              relief="flat", state="disabled", takefocus=0,
+                              height=4)
         self.viewer.grid(row=2, column=0, sticky="nsew")
         self.viewer.configure(state="normal")
         self.viewer.insert("1.0", " click or double-click a finding -\n its full content opens here")
@@ -956,7 +957,7 @@ class App(tk.Tk):
         self.console = tk.Text(conwrap, bg=PANEL, fg=TXT, wrap="none",
                                insertbackground=TURQ, selectbackground=BLUE,
                                font=("Consolas", 10), bd=0, padx=12, pady=8,
-                               state="disabled", relief="flat")
+                               state="disabled", relief="flat", height=8)
         csb = ttk.Scrollbar(conwrap, command=self.console.yview)
         self.console.configure(yscrollcommand=csb.set)
         self.console.pack(fill="both", expand=True, side="left")
@@ -987,8 +988,11 @@ class App(tk.Tk):
                                  cursor="hand2")
         self.talk_btn.pack(side="left", padx=(6, 0), pady=4)
         self.talk_btn.bind("<Button-1>", lambda e: self.talk_send())
-        meters = tk.Frame(talkm, bg=BG)
-        meters.pack(side="left", padx=(8, 0))
+        bottm = tk.Frame(self, bg=PANEL)
+        bottm.grid(row=2, column=0, columnspan=2, sticky="ew", padx=14,
+                   pady=(6, 10))
+        meters = tk.Frame(bottm, bg=PANEL)
+        meters.pack(side="right", padx=(8, 0))
         self.g_cpu = Gauge(meters, "HOST CPU", TURQ)
         self.g_cpu.pack(side="left")
         self.g_ram = Gauge(meters, "HOST RAM", BLUE)
@@ -1001,9 +1005,9 @@ class App(tk.Tk):
         self.chart = Sparkline(meters, TURQ)
         self.chart.pack(side="left", fill="both", expand=True)
 
-        self.statusbar = tk.Label(self, text="", bg=PANEL, fg=DIM, anchor="w",
+        self.statusbar = tk.Label(bottm, text="", bg=PANEL, fg=DIM, anchor="w",
                                   font=("Segoe UI", 8), padx=12, pady=4)
-        self.statusbar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=14, pady=(6, 10))
+        self.statusbar.pack(side="left", fill="both", expand=True)
 
     def _style_combos(self):
         style = ttk.Style(self)
